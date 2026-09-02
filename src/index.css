@@ -63,16 +63,22 @@
 }
 
 html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
   background: var(--bg);
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
 }
 
 body {
+  width: 100%;
+  max-width: 100%;
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
   min-height: 100svh;
+  overflow-x: clip;
   background: var(--bg);
 }
 
@@ -108,5 +114,9 @@ p {
 }
 
 #root {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 100svh;
+  overflow-x: clip;
 }
