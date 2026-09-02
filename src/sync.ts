@@ -1,6 +1,7 @@
 import {
-  API_TIMEOUT_MS,
+  READ_TIMEOUT_MS,
   SYNC_API_URL,
+  WRITE_TIMEOUT_MS,
 } from './config'
 import { db, setMeta } from './db'
 import type {
@@ -37,12 +38,12 @@ export function onSyncStatus(
   return () => window.removeEventListener(SYNC_EVENT, handler)
 }
 
-function withTimeout(signal?: AbortSignal): {
+function withTimeout(timeoutMs: number, signal?: AbortSignal): {
   signal: AbortSignal
   cancel: () => void
 } {
   const controller = new AbortController()
-  const timer = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
   signal?.addEventListener('abort', () => controller.abort(), { once: true })
   return {
     signal: controller.signal,
@@ -53,8 +54,9 @@ function withTimeout(signal?: AbortSignal): {
 async function fetchJson<T>(
   input: string | URL,
   init: RequestInit,
+  timeoutMs: number,
 ): Promise<T> {
-  const timeout = withTimeout(init.signal ?? undefined)
+  const timeout = withTimeout(timeoutMs, init.signal ?? undefined)
   try {
     const response = await fetch(input, {
       ...init,
@@ -91,7 +93,7 @@ async function getBootstrap(): Promise<BootstrapPayload> {
   const url = new URL(SYNC_API_URL, window.location.origin)
   url.searchParams.set('action', 'bootstrap')
   url.searchParams.set('_', Date.now().toString())
-  const data = await fetchJson<BootstrapPayload>(url, { method: 'GET' })
+  const data = await fetchJson<BootstrapPayload>(url, { method: 'GET' }, READ_TIMEOUT_MS)
   if (!data.success) throw new Error(data.message || 'Could not load sheet data')
   return data
 }
@@ -106,7 +108,7 @@ async function postOperation(item: QueueItem): Promise<Record<string, unknown>> 
       payload: item.payload,
     }),
     keepalive: true,
-  })
+  }, WRITE_TIMEOUT_MS)
   if (data.success !== true) {
     throw new Error(String(data.message || 'A queued change could not be saved'))
   }
@@ -208,7 +210,7 @@ async function performSync(): Promise<void> {
     await applyBootstrap(bootstrap)
     await setMeta('lastSuccessfulSync', new Date().toISOString())
     const pending = await db.queue.count()
-    emit({ phase: 'syncing', message: 'Sheet data updated', pending })
+    emit({ phase: 'idle', message: 'Sheet data updated', pending })
 
     try {
       await pushQueue()

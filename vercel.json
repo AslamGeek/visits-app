@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/sync.js": { "maxDuration": 15 }
+    "api/sync.js": { "maxDuration": 60 }
   },
   "routes": [
     { "handle": "filesystem" },

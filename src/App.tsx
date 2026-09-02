@@ -67,6 +67,7 @@ function SyncBadge({
     if (detail.phase === 'offline') return { icon: <WifiOff size={13} />, label: detail.pending ? `${detail.pending} offline` : 'Offline' }
     if (detail.phase === 'syncing') return { icon: <RefreshCw className="spin" size={13} />, label: 'Saving' }
     if (detail.phase === 'error') return { icon: <CloudOff size={13} />, label: detail.pending ? `${detail.pending} pending` : 'Local only' }
+    if (detail.pending) return { icon: <RefreshCw size={13} />, label: `${detail.pending} queued` }
     return { icon: <Check size={13} />, label: 'Saved' }
   })()
   return (
