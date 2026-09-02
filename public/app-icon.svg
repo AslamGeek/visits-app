@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MedRep">
+  <rect width="512" height="512" rx="118" fill="#167b5a"/>
+  <path d="M163 112v93c0 58 41 105 93 105s93-47 93-105v-93" fill="none" stroke="#fff" stroke-width="42" stroke-linecap="round"/>
+  <path d="M256 310v36c0 45 31 71 71 71 37 0 67-27 67-63" fill="none" stroke="#fff" stroke-width="42" stroke-linecap="round"/>
+  <circle cx="395" cy="320" r="35" fill="#dff5eb" stroke="#fff" stroke-width="18"/>
+  <circle cx="163" cy="113" r="28" fill="#dff5eb"/>
+  <circle cx="349" cy="113" r="28" fill="#dff5eb"/>
+</svg>
