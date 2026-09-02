@@ -1,6 +1,10 @@
 {
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+  "functions": {
+    "api/sync.js": { "maxDuration": 15 }
+  },
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/.*", "dest": "/index.html" }
   ],
   "headers": [
     {

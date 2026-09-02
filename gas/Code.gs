@@ -15,6 +15,10 @@ var CONFIG = {
   MAX_REMEMBERED_OPERATIONS: 250
 };
 
+// Reuse the spreadsheet handle during one Apps Script invocation. Opening the
+// same spreadsheet for every tab is one of the largest bootstrap delays.
+var ACTIVE_SPREADSHEET_ = null;
+
 var SHEET_HEADERS = {
   Doctors: [
     'ID', 'Name', 'Specialties', 'Hospital', 'Pharmacy', 'Area', 'Camp',
@@ -105,7 +109,10 @@ function setupSpreadsheet() {
 }
 
 function spreadsheet_() {
-  return SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  if (!ACTIVE_SPREADSHEET_) {
+    ACTIVE_SPREADSHEET_ = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  }
+  return ACTIVE_SPREADSHEET_;
 }
 
 function sheet_(name) {

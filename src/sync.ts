@@ -1,7 +1,6 @@
 import {
   API_TIMEOUT_MS,
-  GAS_WEB_APP_URL,
-  SYNC_RETRY_DELAY_MS,
+  SYNC_API_URL,
 } from './config'
 import { db, setMeta } from './db'
 import type {
@@ -51,49 +50,45 @@ function withTimeout(signal?: AbortSignal): {
   }
 }
 
-function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
-}
-
 async function fetchJson<T>(
   input: string | URL,
   init: RequestInit,
 ): Promise<T> {
-  let lastError: unknown
-
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const timeout = withTimeout(init.signal ?? undefined)
+  const timeout = withTimeout(init.signal ?? undefined)
+  try {
+    const response = await fetch(input, {
+      ...init,
+      cache: 'no-store',
+      credentials: 'same-origin',
+      referrerPolicy: 'no-referrer',
+      signal: timeout.signal,
+    })
+    const text = await response.text()
+    let data: unknown
     try {
-      const response = await fetch(input, {
-        ...init,
-        cache: 'no-store',
-        credentials: 'omit',
-        mode: 'cors',
-        redirect: 'follow',
-        referrerPolicy: 'no-referrer',
-        signal: timeout.signal,
-      })
-      if (!response.ok) {
-        throw new Error(`Sync service returned ${response.status}`)
-      }
-      return (await response.json()) as T
-    } catch (error) {
-      lastError = error
-      if (attempt === 0 && navigator.onLine) {
-        await wait(SYNC_RETRY_DELAY_MS)
-        continue
-      }
-      throw error
-    } finally {
-      timeout.cancel()
+      data = JSON.parse(text)
+    } catch {
+      throw new Error('The sync service returned an invalid response')
     }
+    if (!response.ok) {
+      const message = (data as { message?: unknown }).message
+      throw new Error(
+        typeof message === 'string' ? message : `Sync service returned ${response.status}`,
+      )
+    }
+    return data as T
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Sync timed out. Tap the cloud icon to try again.')
+    }
+    throw error
+  } finally {
+    timeout.cancel()
   }
-
-  throw lastError
 }
 
 async function getBootstrap(): Promise<BootstrapPayload> {
-  const url = new URL(GAS_WEB_APP_URL)
+  const url = new URL(SYNC_API_URL, window.location.origin)
   url.searchParams.set('action', 'bootstrap')
   url.searchParams.set('_', Date.now().toString())
   const data = await fetchJson<BootstrapPayload>(url, { method: 'GET' })
@@ -102,7 +97,7 @@ async function getBootstrap(): Promise<BootstrapPayload> {
 }
 
 async function postOperation(item: QueueItem): Promise<Record<string, unknown>> {
-  const data = await fetchJson<Record<string, unknown>>(GAS_WEB_APP_URL, {
+  const data = await fetchJson<Record<string, unknown>>(SYNC_API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({
@@ -207,18 +202,23 @@ async function applyBootstrap(payload: BootstrapPayload): Promise<void> {
 }
 
 async function performSync(): Promise<void> {
-  if (!navigator.onLine) {
-    emit({ phase: 'offline', pending: await db.queue.count() })
-    return
-  }
-
   emit({ phase: 'syncing', pending: await db.queue.count() })
   try {
-    await pushQueue()
     const bootstrap = await getBootstrap()
     await applyBootstrap(bootstrap)
     await setMeta('lastSuccessfulSync', new Date().toISOString())
-    emit({ phase: 'idle', pending: await db.queue.count() })
+    const pending = await db.queue.count()
+    emit({ phase: 'syncing', message: 'Sheet data updated', pending })
+
+    try {
+      await pushQueue()
+      emit({ phase: 'idle', pending: await db.queue.count() })
+    } catch (error) {
+      const message = error instanceof Error
+        ? `Sheet data updated. A local change is still pending: ${error.message}`
+        : 'Sheet data updated. A local change is still pending.'
+      emit({ phase: 'error', message, pending: await db.queue.count() })
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Sync is temporarily unavailable'
     emit({ phase: 'error', message, pending: await db.queue.count() })

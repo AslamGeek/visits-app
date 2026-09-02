@@ -155,7 +155,7 @@ function App() {
     window.addEventListener('beforeinstallprompt', beforeInstall)
     document.addEventListener('visibilitychange', visible)
     const periodicSync = window.setInterval(() => {
-      if (document.visibilityState === 'visible' && navigator.onLine) {
+      if (document.visibilityState === 'visible') {
         void syncNow().then(reload)
       }
     }, FOREGROUND_SYNC_INTERVAL_MS)
@@ -282,7 +282,7 @@ function App() {
       {needsApiSetup && (
         <div className="setup-banner">
           <CloudOff size={18} />
-          <div><strong>Working locally</strong><p>Deploy the included Apps Script API to connect the new spreadsheet. You can keep using the app offline.</p></div>
+          <div><strong>Sheet sync unavailable</strong><p>Check your connection, then tap the cloud icon to try again. Your offline data remains available.</p></div>
         </div>
       )}
 
