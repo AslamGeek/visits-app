@@ -1,0 +1,313 @@
+import { useCallback, useEffect, useState } from 'react'
+import {
+  CalendarDays,
+  Check,
+  CloudOff,
+  Download,
+  Moon,
+  RefreshCw,
+  Stethoscope,
+  Sun,
+  Users,
+  WifiOff,
+  X,
+} from 'lucide-react'
+import './App.css'
+import { APP_NAME, UNDO_WINDOW_MS } from './config'
+import { db, DEFAULT_MASTER, loadSnapshot } from './db'
+import { Directory } from './components/Directory'
+import { DoctorDetail } from './components/DoctorDetail'
+import { DoctorForm } from './components/DoctorForm'
+import { Visits } from './components/Visits'
+import { onSyncStatus, queueChange, syncNow, type SyncDetail } from './sync'
+import {
+  EMPTY_FILTERS,
+  type AppSnapshot,
+  type Doctor,
+  type FilterPreset,
+  type FilterState,
+  type Visit,
+} from './types'
+
+type Section = 'directory' | 'visits'
+type Theme = 'light' | 'dark'
+
+interface InstallPromptEvent extends Event {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
+}
+
+interface ToastState {
+  id: string
+  message: string
+  actionLabel?: string
+  action?: () => void
+}
+
+const EMPTY_SNAPSHOT: AppSnapshot = {
+  doctors: [],
+  visits: [],
+  master: DEFAULT_MASTER,
+  presets: [],
+  pendingCount: 0,
+}
+
+function SyncBadge({ detail }: { detail: SyncDetail }) {
+  const content = (() => {
+    if (detail.phase === 'offline') return { icon: <WifiOff size={13} />, label: detail.pending ? `${detail.pending} offline` : 'Offline' }
+    if (detail.phase === 'syncing') return { icon: <RefreshCw className="spin" size={13} />, label: 'Saving' }
+    if (detail.phase === 'error') return { icon: <CloudOff size={13} />, label: detail.pending ? `${detail.pending} pending` : 'Local only' }
+    return { icon: <Check size={13} />, label: 'Saved' }
+  })()
+  return <div className={`sync-badge ${detail.phase}`} title={detail.message}>{content.icon}<span>{content.label}</span></div>
+}
+
+function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
+  useEffect(() => {
+    const timer = window.setTimeout(onClose, UNDO_WINDOW_MS)
+    return () => window.clearTimeout(timer)
+  }, [toast.id, onClose])
+  return (
+    <div className="toast" role="status">
+      <span>{toast.message}</span>
+      {toast.action && <button onClick={() => { toast.action?.(); onClose() }}>{toast.actionLabel}</button>}
+      <button className="toast-close" onClick={onClose} aria-label="Dismiss"><X size={15} /></button>
+    </div>
+  )
+}
+
+function App() {
+  const [section, setSection] = useState<Section>('directory')
+  const [snapshot, setSnapshot] = useState<AppSnapshot>(EMPTY_SNAPSHOT)
+  const [loading, setLoading] = useState(true)
+  const [syncDetail, setSyncDetail] = useState<SyncDetail>({
+    phase: navigator.onLine ? 'idle' : 'offline',
+    pending: 0,
+  })
+  const [filters, setFilters] = useState<FilterState>(() => structuredClone(EMPTY_FILTERS))
+  const [editingDoctor, setEditingDoctor] = useState<Doctor | null | undefined>(undefined)
+  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
+  const [focusDoctorId, setFocusDoctorId] = useState<string | null>(null)
+  const [toast, setToast] = useState<ToastState | null>(null)
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
+  const [theme, setTheme] = useState<Theme>(() => {
+    const stored = localStorage.getItem('medrep-theme')
+    if (stored === 'light' || stored === 'dark') return stored
+    return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  })
+
+  const reload = useCallback(async () => {
+    setSnapshot(await loadSnapshot())
+  }, [])
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('medrep-theme', theme)
+  }, [theme])
+
+  useEffect(() => {
+    let active = true
+    void loadSnapshot().then((data) => {
+      if (!active) return
+      setSnapshot(data)
+      setLoading(false)
+      setSyncDetail((current) => ({ ...current, pending: data.pendingCount }))
+    })
+
+    const removeSyncListener = onSyncStatus((detail) => {
+      if (!active) return
+      setSyncDetail(detail)
+      void reload()
+    })
+    const online = () => void syncNow().then(reload)
+    const offline = () => setSyncDetail((current) => ({ ...current, phase: 'offline' }))
+    const visible = () => {
+      if (document.visibilityState === 'visible') void syncNow().then(reload)
+    }
+    const beforeInstall = (event: Event) => {
+      event.preventDefault()
+      setInstallPrompt(event as InstallPromptEvent)
+    }
+    window.addEventListener('online', online)
+    window.addEventListener('offline', offline)
+    window.addEventListener('beforeinstallprompt', beforeInstall)
+    document.addEventListener('visibilitychange', visible)
+    void syncNow().then(reload)
+
+    return () => {
+      active = false
+      removeSyncListener()
+      window.removeEventListener('online', online)
+      window.removeEventListener('offline', offline)
+      window.removeEventListener('beforeinstallprompt', beforeInstall)
+      document.removeEventListener('visibilitychange', visible)
+    }
+  }, [reload])
+
+  const showToast = useCallback((next: Omit<ToastState, 'id'>) => {
+    setToast({ ...next, id: crypto.randomUUID() })
+  }, [])
+
+  const saveDoctor = async (doctor: Doctor) => {
+    await db.doctors.put(doctor)
+    await queueChange('upsertDoctor', doctor.id, doctor)
+    await reload()
+    setEditingDoctor(undefined)
+    setSelectedDoctor(doctor)
+    showToast({ message: 'Doctor saved locally' })
+    void syncNow().then(reload)
+  }
+
+  const undoVisit = async (visit: Visit) => {
+    const pending = await db.queue
+      .where('entityId')
+      .equals(visit.localId)
+      .filter((item) => item.action === 'saveVisit')
+      .first()
+    await db.transaction('rw', db.queue, db.visits, async () => {
+      if (pending?.id !== undefined) await db.queue.delete(pending.id)
+      await db.visits.delete(visit.localId)
+    })
+    if (!pending) await queueChange('undoVisit', visit.localId, { visit })
+    await reload()
+    showToast({ message: 'Visit removed' })
+    void syncNow().then(reload)
+  }
+
+  const saveVisit = async (visit: Visit) => {
+    await db.visits.put(visit)
+    await queueChange('saveVisit', visit.localId, visit)
+    await reload()
+    showToast({
+      message: `${visit.kind === 'Visit' ? 'Visit bundle' : visit.kind} saved locally`,
+      actionLabel: 'Undo',
+      action: () => void undoVisit(visit),
+    })
+    void syncNow().then(reload)
+  }
+
+  const savePreset = async (name: string, nextFilters: FilterState) => {
+    const existing = snapshot.presets.find(
+      (preset) => preset.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+    )
+    const preset: FilterPreset = {
+      id: existing?.id ?? crypto.randomUUID(),
+      name,
+      filters: structuredClone(nextFilters),
+      updatedAt: new Date().toISOString(),
+    }
+    await db.presets.put(preset)
+    await reload()
+    showToast({ message: `Saved “${name}”` })
+  }
+
+  const deletePreset = async (id: string) => {
+    await db.presets.delete(id)
+    await reload()
+  }
+
+  const install = async () => {
+    if (!installPrompt) return
+    await installPrompt.prompt()
+    const choice = await installPrompt.userChoice
+    if (choice.outcome === 'accepted') setInstallPrompt(null)
+  }
+
+  const logFromDoctor = (doctor: Doctor) => {
+    setSelectedDoctor(null)
+    setFocusDoctorId(doctor.id)
+    setSection('visits')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const selectSection = (next: Section) => {
+    setFocusDoctorId(null)
+    setSection(next)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const needsApiSetup =
+    syncDetail.phase === 'error' &&
+    snapshot.master.settings.areas.length === 0 &&
+    snapshot.doctors.length === 0
+
+  return (
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="brand-lockup">
+          <div className="brand-mark"><Stethoscope size={21} /></div>
+          <div><p className="eyebrow">Field companion</p><h1>{APP_NAME}</h1></div>
+        </div>
+        <div className="header-actions">
+          <SyncBadge detail={syncDetail} />
+          {installPrompt && <button className="icon-button" onClick={install} aria-label="Install app"><Download size={19} /></button>}
+          <button className="icon-button" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label={`Use ${theme === 'light' ? 'dark' : 'light'} theme`}>
+            {theme === 'light' ? <Moon size={19} /> : <Sun size={19} />}
+          </button>
+        </div>
+      </header>
+
+      {needsApiSetup && (
+        <div className="setup-banner">
+          <CloudOff size={18} />
+          <div><strong>Working locally</strong><p>Deploy the included Apps Script API to connect the new spreadsheet. You can keep using the app offline.</p></div>
+        </div>
+      )}
+
+      <main className="main-content">
+        {loading ? (
+          <div className="app-loading"><div className="loading-mark"><Stethoscope size={25} /></div><strong>Opening your field desk…</strong></div>
+        ) : section === 'directory' ? (
+          <Directory
+            doctors={snapshot.doctors}
+            products={snapshot.master.products}
+            settings={snapshot.master.settings}
+            presets={snapshot.presets}
+            filters={filters}
+            onFiltersChange={setFilters}
+            onAdd={() => setEditingDoctor(null)}
+            onOpen={setSelectedDoctor}
+            onSavePreset={(name, nextFilters) => void savePreset(name, nextFilters)}
+            onDeletePreset={(id) => void deletePreset(id)}
+          />
+        ) : (
+          <Visits
+            doctors={snapshot.doctors}
+            visits={snapshot.visits}
+            settings={snapshot.master.settings}
+            focusDoctorId={focusDoctorId}
+            onSave={saveVisit}
+          />
+        )}
+      </main>
+
+      <nav className="bottom-nav" aria-label="Main navigation">
+        <button className={section === 'directory' ? 'active' : ''} onClick={() => selectSection('directory')}><Users size={20} /><span>Directory</span></button>
+        <button className={section === 'visits' ? 'active' : ''} onClick={() => selectSection('visits')}><CalendarDays size={20} /><span>Visits</span></button>
+      </nav>
+
+      {editingDoctor !== undefined && (
+        <DoctorForm
+          doctor={editingDoctor}
+          doctors={snapshot.doctors}
+          master={snapshot.master}
+          onClose={() => setEditingDoctor(undefined)}
+          onSave={saveDoctor}
+        />
+      )}
+      {selectedDoctor && (
+        <DoctorDetail
+          doctor={snapshot.doctors.find((doctor) => doctor.id === selectedDoctor.id) ?? selectedDoctor}
+          products={snapshot.master.products}
+          visits={snapshot.visits}
+          onClose={() => setSelectedDoctor(null)}
+          onEdit={() => { setEditingDoctor(selectedDoctor); setSelectedDoctor(null) }}
+          onLogVisit={logFromDoctor}
+        />
+      )}
+      {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
+    </div>
+  )
+}
+
+export default App
