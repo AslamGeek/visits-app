@@ -406,9 +406,11 @@ export function Directory({
                 <div className="doctor-card-main">
                   <div className="doctor-title-row">
                     <h3>{doctor.name}</h3>
-                    {doctor.prescriber === 'Rx' && <span className="rx-badge">Rx</span>}
                   </div>
-                  <p>{[doctor.hospital, doctor.area].filter(Boolean).join(' · ') || doctor.camp}</p>
+                  <p>
+                    {[doctor.hospital, doctor.pharmacy].filter(Boolean).join(' · ') ||
+                      doctor.camp}
+                  </p>
                   <div className="mini-tags">
                     {doctor.specialties.slice(0, 2).map((specialty) => (
                       <span key={specialty}>{specialty}</span>
@@ -419,6 +421,11 @@ export function Directory({
                     <div className="product-line">{productNames.join(' · ')}</div>
                   )}
                 </div>
+                <span
+                  className={`rx-badge prescriber-badge ${doctor.prescriber === 'Rx' ? 'rx' : 'nrx'}`}
+                >
+                  {doctor.prescriber}
+                </span>
                 <ChevronRight className="card-chevron" size={20} />
               </button>
             )

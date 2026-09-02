@@ -1,4 +1,8 @@
-import { API_TIMEOUT_MS, GAS_WEB_APP_URL } from './config'
+import {
+  API_TIMEOUT_MS,
+  GAS_WEB_APP_URL,
+  SYNC_RETRY_DELAY_MS,
+} from './config'
 import { db, setMeta } from './db'
 import type {
   BootstrapPayload,
@@ -47,51 +51,71 @@ function withTimeout(signal?: AbortSignal): {
   }
 }
 
-async function getBootstrap(): Promise<BootstrapPayload> {
-  const timeout = withTimeout()
-  try {
-    const url = new URL(GAS_WEB_APP_URL)
-    url.searchParams.set('action', 'bootstrap')
-    url.searchParams.set('_', Date.now().toString())
-    const response = await fetch(url, {
-      method: 'GET',
-      cache: 'no-store',
-      redirect: 'follow',
-      signal: timeout.signal,
-    })
-    if (!response.ok) throw new Error(`Sync service returned ${response.status}`)
-    const data = (await response.json()) as BootstrapPayload
-    if (!data.success) throw new Error(data.message || 'Could not load sheet data')
-    return data
-  } finally {
-    timeout.cancel()
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
+}
+
+async function fetchJson<T>(
+  input: string | URL,
+  init: RequestInit,
+): Promise<T> {
+  let lastError: unknown
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const timeout = withTimeout(init.signal ?? undefined)
+    try {
+      const response = await fetch(input, {
+        ...init,
+        cache: 'no-store',
+        credentials: 'omit',
+        mode: 'cors',
+        redirect: 'follow',
+        referrerPolicy: 'no-referrer',
+        signal: timeout.signal,
+      })
+      if (!response.ok) {
+        throw new Error(`Sync service returned ${response.status}`)
+      }
+      return (await response.json()) as T
+    } catch (error) {
+      lastError = error
+      if (attempt === 0 && navigator.onLine) {
+        await wait(SYNC_RETRY_DELAY_MS)
+        continue
+      }
+      throw error
+    } finally {
+      timeout.cancel()
+    }
   }
+
+  throw lastError
+}
+
+async function getBootstrap(): Promise<BootstrapPayload> {
+  const url = new URL(GAS_WEB_APP_URL)
+  url.searchParams.set('action', 'bootstrap')
+  url.searchParams.set('_', Date.now().toString())
+  const data = await fetchJson<BootstrapPayload>(url, { method: 'GET' })
+  if (!data.success) throw new Error(data.message || 'Could not load sheet data')
+  return data
 }
 
 async function postOperation(item: QueueItem): Promise<Record<string, unknown>> {
-  const timeout = withTimeout()
-  try {
-    const response = await fetch(GAS_WEB_APP_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: item.action,
-        opId: item.opId,
-        payload: item.payload,
-      }),
-      cache: 'no-store',
-      redirect: 'follow',
-      signal: timeout.signal,
-    })
-    if (!response.ok) throw new Error(`Sync service returned ${response.status}`)
-    const data = (await response.json()) as Record<string, unknown>
-    if (data.success !== true) {
-      throw new Error(String(data.message || 'A queued change could not be saved'))
-    }
-    return data
-  } finally {
-    timeout.cancel()
+  const data = await fetchJson<Record<string, unknown>>(GAS_WEB_APP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({
+      action: item.action,
+      opId: item.opId,
+      payload: item.payload,
+    }),
+    keepalive: true,
+  })
+  if (data.success !== true) {
+    throw new Error(String(data.message || 'A queued change could not be saved'))
   }
+  return data
 }
 
 export async function queueChange(

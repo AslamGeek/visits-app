@@ -13,7 +13,11 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
-import { APP_NAME, UNDO_WINDOW_MS } from './config'
+import {
+  APP_NAME,
+  FOREGROUND_SYNC_INTERVAL_MS,
+  UNDO_WINDOW_MS,
+} from './config'
 import { db, DEFAULT_MASTER, loadSnapshot } from './db'
 import { Directory } from './components/Directory'
 import { DoctorDetail } from './components/DoctorDetail'
@@ -52,14 +56,31 @@ const EMPTY_SNAPSHOT: AppSnapshot = {
   pendingCount: 0,
 }
 
-function SyncBadge({ detail }: { detail: SyncDetail }) {
+function SyncBadge({
+  detail,
+  onRetry,
+}: {
+  detail: SyncDetail
+  onRetry: () => void
+}) {
   const content = (() => {
     if (detail.phase === 'offline') return { icon: <WifiOff size={13} />, label: detail.pending ? `${detail.pending} offline` : 'Offline' }
     if (detail.phase === 'syncing') return { icon: <RefreshCw className="spin" size={13} />, label: 'Saving' }
     if (detail.phase === 'error') return { icon: <CloudOff size={13} />, label: detail.pending ? `${detail.pending} pending` : 'Local only' }
     return { icon: <Check size={13} />, label: 'Saved' }
   })()
-  return <div className={`sync-badge ${detail.phase}`} title={detail.message}>{content.icon}<span>{content.label}</span></div>
+  return (
+    <button
+      type="button"
+      className={`sync-badge ${detail.phase}`}
+      title={detail.message || 'Sync with Google Sheets'}
+      aria-label={`${content.label}. Tap to sync with Google Sheets.`}
+      disabled={detail.phase === 'syncing'}
+      onClick={onRetry}
+    >
+      {content.icon}<span>{content.label}</span>
+    </button>
+  )
 }
 
 function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
@@ -129,18 +150,26 @@ function App() {
       setInstallPrompt(event as InstallPromptEvent)
     }
     window.addEventListener('online', online)
+    window.addEventListener('focus', online)
     window.addEventListener('offline', offline)
     window.addEventListener('beforeinstallprompt', beforeInstall)
     document.addEventListener('visibilitychange', visible)
+    const periodicSync = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        void syncNow().then(reload)
+      }
+    }, FOREGROUND_SYNC_INTERVAL_MS)
     void syncNow().then(reload)
 
     return () => {
       active = false
       removeSyncListener()
       window.removeEventListener('online', online)
+      window.removeEventListener('focus', online)
       window.removeEventListener('offline', offline)
       window.removeEventListener('beforeinstallprompt', beforeInstall)
       document.removeEventListener('visibilitychange', visible)
+      window.clearInterval(periodicSync)
     }
   }, [reload])
 
@@ -239,7 +268,10 @@ function App() {
           <div><p className="eyebrow">Field companion</p><h1>{APP_NAME}</h1></div>
         </div>
         <div className="header-actions">
-          <SyncBadge detail={syncDetail} />
+          <SyncBadge
+            detail={syncDetail}
+            onRetry={() => void syncNow().then(reload)}
+          />
           {installPrompt && <button className="icon-button" onClick={install} aria-label="Install app"><Download size={19} /></button>}
           <button className="icon-button" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label={`Use ${theme === 'light' ? 'dark' : 'light'} theme`}>
             {theme === 'light' ? <Moon size={19} /> : <Sun size={19} />}

@@ -109,7 +109,10 @@
   font-size: 11px;
   font-weight: 730;
   white-space: nowrap;
+  cursor: pointer;
 }
+
+.sync-badge:disabled { cursor: wait; }
 
 .sync-badge.error,
 .sync-badge.offline {
@@ -334,12 +337,13 @@
 }
 
 .doctor-card {
+  position: relative;
   display: flex;
   width: 100%;
   min-width: 0;
   max-width: 100%;
   min-height: 104px;
-  padding: 15px 13px 14px 15px;
+  padding: 15px 52px 14px 15px;
   overflow: hidden;
   align-items: center;
   text-align: left;
@@ -353,17 +357,24 @@
 }
 
 .doctor-card:active { transform: scale(0.99); }
-.doctor-card.rx { background: linear-gradient(105deg, var(--accent-softer), var(--surface) 62%); border-color: color-mix(in srgb, var(--accent) 27%, var(--border)); }
+.doctor-card.rx {
+  background: linear-gradient(105deg, var(--accent-soft), var(--accent-softer) 48%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  box-shadow: inset 4px 0 0 var(--accent), var(--shadow-sm);
+}
 .doctor-card-main { width: 0; min-width: 0; max-width: 100%; flex: 1 1 0; overflow: hidden; }
 .doctor-title-row { min-width: 0; gap: 7px; }
 .doctor-title-row h3 { min-width: 0; overflow: hidden; color: var(--ink); font-size: 16px; font-weight: 760; letter-spacing: -0.018em; text-overflow: ellipsis; white-space: nowrap; }
-.doctor-card-main > p { margin-top: 4px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.doctor-card-main > p { margin-top: 4px; overflow-wrap: anywhere; color: var(--muted); font-size: 12px; line-height: 1.4; white-space: normal; }
 .rx-badge,
 .status-badge { display: inline-flex; min-height: 20px; flex: 0 0 auto; align-items: center; padding: 0 7px; color: var(--accent-strong); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent); border-radius: 99px; font-size: 9px; font-weight: 850; letter-spacing: 0.04em; }
-.mini-tags { display: flex; gap: 5px; margin-top: 8px; overflow: hidden; }
+.prescriber-badge { position: absolute; top: 13px; right: 13px; z-index: 1; }
+.prescriber-badge.rx { color: white; background: var(--accent); border-color: var(--accent); }
+.prescriber-badge.nrx { color: var(--muted); background: var(--surface-soft); border-color: var(--border); }
+.mini-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
 .mini-tags span { max-width: 120px; overflow: hidden; padding: 3px 7px; color: var(--muted); background: var(--surface-soft); border-radius: 6px; font-size: 9px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.product-line { width: 100%; min-width: 0; max-width: 100%; margin-top: 8px; overflow: hidden; color: var(--accent-strong); font-size: 11px; font-weight: 690; text-overflow: ellipsis; white-space: nowrap; }
-.card-chevron { flex: 0 0 auto; color: var(--faint); }
+.product-line { width: 100%; min-width: 0; max-width: 100%; margin-top: 8px; overflow-wrap: anywhere; color: var(--accent-strong); font-size: 11px; font-weight: 690; line-height: 1.45; white-space: normal; }
+.card-chevron { position: absolute; top: 50%; right: 14px; flex: 0 0 auto; color: var(--faint); transform: translateY(-50%); }
 .list-limit-note { padding: 12px; color: var(--muted); text-align: center; font-size: 12px; }
 
 .empty-card {
