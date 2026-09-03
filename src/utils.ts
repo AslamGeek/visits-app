@@ -39,18 +39,30 @@ export function unique(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
 }
 
-export function generateDoctorId(camp: string): string {
-  const code =
-    camp
-      .split(/[^a-zA-Z0-9]+/)
-      .filter(Boolean)
-      .map((part) => part.slice(0, 2))
-      .join('')
-      .toUpperCase()
-      .slice(0, 6) || 'DOC'
-  const time = Date.now().toString(36).toUpperCase().slice(-5)
-  const random = crypto.randomUUID().slice(0, 3).toUpperCase()
-  return `${code}-${time}${random}`
+const CAMP_CODE_MAP: Record<string, string> = {
+  proddatur: 'PDTR',
+  'mydukuru/gv satram': 'MYGV',
+  'yerraguntla/kamalapuram': 'YEKA',
+  jammalamadugu: 'JAMD',
+  'porumamilla/kalasapadu': 'POKA',
+}
+
+function campCode(camp: string): string {
+  return CAMP_CODE_MAP[normalize(camp)]
+    ?? camp.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4)
+    ?? 'DOC'
+}
+
+export function generateDoctorId(camp: string, doctors: Doctor[]): string {
+  const code = campCode(camp) || 'DOC'
+  const maxSequence = doctors.reduce((maximum, doctor) => {
+    if (normalize(doctor.camp) !== normalize(camp)) return maximum
+    const match = doctor.id.match(/^(.+)-(\d+)$/)
+    if (!match || normalize(match[1]) !== normalize(code)) return maximum
+    const sequence = Number(match[2])
+    return Number.isFinite(sequence) ? Math.max(maximum, sequence) : maximum
+  }, 0)
+  return `${code}-${String(maxSequence + 1).padStart(3, '0')}`
 }
 
 export function productLabel(product: Product): string {

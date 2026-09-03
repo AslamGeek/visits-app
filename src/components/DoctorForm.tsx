@@ -104,7 +104,8 @@ export function DoctorForm({ doctor, doctors, master, onClose, onSave }: DoctorF
 
     const payload: Doctor = {
       ...form,
-      id: form.id || generateDoctorId(form.camp),
+      id: form.id || generateDoctorId(form.camp, doctors),
+      isNewRecord: !doctor,
       name: form.name.trim(),
       prescribingProductIds:
         form.prescriber === 'Rx' ? form.prescribingProductIds : [],

@@ -34,12 +34,36 @@ interface VisitsProps {
   onSave: (visit: Visit) => Promise<void>
 }
 
-function VisitHistory({ visits }: { visits: Visit[] }) {
+function VisitHistory({ visits, camps }: { visits: Visit[]; camps: string[] }) {
   const [dateFilter, setDateFilter] = useState('')
+  const [campFilter, setCampFilter] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const visibleVisits = dateFilter
-    ? visits.filter((visit) => visit.date === dateFilter)
-    : visits
+  const [monthVisibility, setMonthVisibility] = useState<Record<string, boolean>>({})
+  const campOptions = unique([...camps, ...visits.map((visit) => visit.camp)])
+    .sort((a, b) => a.localeCompare(b))
+  const visibleVisits = visits
+    .filter((visit) => !dateFilter || visit.date === dateFilter)
+    .filter((visit) => !campFilter || visit.camp === campFilter)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
+  const groupedVisits = visibleVisits.reduce<Array<{ key: string; label: string; visits: Visit[] }>>(
+    (groups, visit) => {
+      const key = visit.date.slice(0, 7)
+      const existing = groups.find((group) => group.key === key)
+      if (existing) {
+        existing.visits.push(visit)
+      } else {
+        groups.push({
+          key,
+          label: new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(
+            new Date(`${visit.date}T00:00:00`),
+          ),
+          visits: [visit],
+        })
+      }
+      return groups
+    },
+    [],
+  )
 
   return (
     <section className="visit-history-section">
@@ -50,7 +74,7 @@ function VisitHistory({ visits }: { visits: Visit[] }) {
 
       <div className="history-filter-row">
         <label className="field">
-          <span>Required date</span>
+          <span>Date</span>
           <input
             type="date"
             value={dateFilter}
@@ -60,95 +84,130 @@ function VisitHistory({ visits }: { visits: Visit[] }) {
             }}
           />
         </label>
+        <label className="field">
+          <span>Camp</span>
+          <select
+            value={campFilter}
+            onChange={(event) => {
+              setCampFilter(event.target.value)
+              setExpandedId(null)
+            }}
+          >
+            <option value="">All camps</option>
+            {campOptions.map((camp) => <option key={camp}>{camp}</option>)}
+          </select>
+        </label>
+      </div>
+
+      {dateFilter && (
         <button
           type="button"
-          className="secondary-button"
-          disabled={!dateFilter}
+          className="history-clear-date"
           onClick={() => {
             setDateFilter('')
             setExpandedId(null)
           }}
         >
-          All dates
+          <X size={13} /> Show all dates
         </button>
-      </div>
+      )}
 
       {visibleVisits.length ? (
         <div className="history-list">
-          {visibleVisits.map((visit) => {
-            const expanded = expandedId === visit.localId
+          {groupedVisits.map((group, groupIndex) => {
+            const monthOpen = dateFilter ? true : (monthVisibility[group.key] ?? groupIndex === 0)
             return (
-              <article
-                className={`history-card ${visit.kind !== 'Visit' ? 'no-visit' : ''}`}
-                key={visit.localId}
-              >
-                <div className="history-date-block">
-                  <strong>{new Date(`${visit.date}T00:00:00`).getDate()}</strong>
-                  <span>
-                    {new Intl.DateTimeFormat('en-IN', { month: 'short' }).format(
-                      new Date(`${visit.date}T00:00:00`),
-                    )}
-                  </span>
-                </div>
-                <div className="history-copy">
-                  <div>
-                    <h3>{visit.camp}</h3>
-                    <span className={`sync-dot ${visit.syncState}`} title={visit.syncState} />
-                  </div>
-                  <p>
-                    {visit.kind === 'Visit'
-                      ? `${visit.doctorCount} doctors · ${visit.pharmacyCount} pharmacies`
-                      : 'No visits'}
-                  </p>
-                  <small>{visit.day} · {formatDate(visit.date)}</small>
-                  <button
-                    type="button"
-                    className="history-detail-button"
-                    aria-expanded={expanded}
-                    onClick={() => setExpandedId(expanded ? null : visit.localId)}
-                  >
-                    {expanded ? 'Hide details' : 'Show details'}
-                    {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  </button>
-                </div>
+              <section className="history-month" key={group.key}>
+                <button
+                  type="button"
+                  className="history-month-toggle"
+                  aria-expanded={monthOpen}
+                  onClick={() => setMonthVisibility((current) => ({
+                    ...current,
+                    [group.key]: !monthOpen,
+                  }))}
+                >
+                  <span>{group.label}</span>
+                  <small>{group.visits.length} {group.visits.length === 1 ? 'bundle' : 'bundles'}</small>
+                  {monthOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
 
-                {expanded && (
-                  <div className="history-details">
-                    {visit.kind === 'Visit' ? (
-                      <>
-                        <div>
-                          <span><Users size={13} /> Doctors</span>
-                          <ol>
-                            {visit.doctorLines.map((doctor, index) => (
-                              <li key={`${doctor}-${index}`}>{doctor}</li>
-                            ))}
-                          </ol>
-                        </div>
-                        <div>
-                          <span><Store size={13} /> Pharmacies</span>
-                          {visit.pharmacyLines.length ? (
-                            <ol>
-                              {visit.pharmacyLines.map((pharmacy, index) => (
-                                <li key={`${pharmacy}-${index}`}>{pharmacy}</li>
-                              ))}
-                            </ol>
-                          ) : <p>None linked</p>}
-                        </div>
-                      </>
-                    ) : <p>This date was saved as a no-visits day.</p>}
+                {monthOpen && (
+                  <div className="history-month-bundles">
+                    {group.visits.map((visit) => {
+                      const expanded = expandedId === visit.localId
+                      return (
+                        <article
+                          className={`history-card ${visit.kind !== 'Visit' ? 'no-visit' : ''}`}
+                          key={visit.localId}
+                        >
+                          <button
+                            type="button"
+                            className="history-summary-button"
+                            aria-expanded={expanded}
+                            aria-label={`${expanded ? 'Hide' : 'Show'} details for ${visit.camp} on ${formatDate(visit.date)}`}
+                            onClick={() => setExpandedId(expanded ? null : visit.localId)}
+                          >
+                            <span className="history-date-block">
+                              <strong>{new Date(`${visit.date}T00:00:00`).getDate()}</strong>
+                              <span>{visit.day.slice(0, 3)}</span>
+                            </span>
+                            <span className="history-copy">
+                              <span>
+                                <strong>{visit.camp}</strong>
+                                <i className={`sync-dot ${visit.syncState}`} title={visit.syncState} />
+                              </span>
+                              <small>
+                                {visit.kind === 'Visit'
+                                  ? `${visit.doctorCount} doctors · ${visit.pharmacyCount} pharmacies`
+                                  : 'No visits'}
+                              </small>
+                            </span>
+                            {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                          </button>
+
+                          {expanded && (
+                            <div className="history-details">
+                              {visit.kind === 'Visit' ? (
+                                <>
+                                  <div>
+                                    <span><Users size={13} /> Doctors</span>
+                                    <ol>
+                                      {visit.doctorLines.map((doctor, index) => (
+                                        <li key={`${doctor}-${index}`}>{doctor}</li>
+                                      ))}
+                                    </ol>
+                                  </div>
+                                  <div>
+                                    <span><Store size={13} /> Pharmacies</span>
+                                    {visit.pharmacyLines.length ? (
+                                      <ol>
+                                        {visit.pharmacyLines.map((pharmacy, index) => (
+                                          <li key={`${pharmacy}-${index}`}>{pharmacy}</li>
+                                        ))}
+                                      </ol>
+                                    ) : <p>None linked</p>}
+                                  </div>
+                                </>
+                              ) : <p>This date was saved as a no-visits day.</p>}
+                            </div>
+                          )}
+                        </article>
+                      )
+                    })}
                   </div>
                 )}
-              </article>
+              </section>
             )
           })}
         </div>
       ) : (
         <div className="empty-card compact">
           <History size={24} />
-          <h3>{dateFilter ? 'No bundles for this date' : 'No visits yet'}</h3>
+          <h3>{dateFilter || campFilter ? 'No matching bundles' : 'No visits yet'}</h3>
           <p>
-            {dateFilter
-              ? 'Choose another date or show all dates.'
+            {dateFilter || campFilter
+              ? 'Choose another date or camp.'
               : 'Your saved bundles will appear here.'}
           </p>
         </div>
@@ -288,7 +347,7 @@ export function Visits({ doctors, visits, settings, focusDoctorId, onSave }: Vis
         </button>
       </div>
 
-      {activeSection === 'history' ? <VisitHistory visits={visits} /> : (
+      {activeSection === 'history' ? <VisitHistory visits={visits} camps={settings.camps} /> : (
         <div className="visit-builder">
           <div className="section-title-row visit-title-row">
             <div><p className="eyebrow">Daily call plan</p><h2>Log visits</h2></div>

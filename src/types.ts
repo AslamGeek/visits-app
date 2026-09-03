@@ -4,6 +4,7 @@ export type SyncState = 'pending' | 'synced' | 'error'
 
 export interface Doctor {
   id: string
+  isNewRecord?: boolean
   name: string
   specialties: string[]
   hospital: string

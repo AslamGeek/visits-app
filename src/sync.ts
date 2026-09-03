@@ -142,6 +142,7 @@ async function pushQueue(): Promise<void> {
         if (item.action === 'upsertDoctor') {
           const doctor = (result.doctor as Doctor | undefined) ?? (item.payload as Doctor)
           await db.doctors.put({ ...doctor, syncState: 'synced' })
+          if (doctor.id !== item.entityId) await db.doctors.delete(item.entityId)
         }
         if (item.action === 'saveVisit') {
           const visit = item.payload as Visit

@@ -44,6 +44,16 @@ var HEADER_ALIASES = {
   'Notes': ['Remarks']
 };
 
+// Official doctor-ID prefixes retained from the original app. Camp names stay
+// unchanged in Settings, Doctors and Visits; this map is used only for Doc IDs.
+var CAMP_CODE_MAP = {
+  'proddatur': 'PDTR',
+  'mydukuru/gv satram': 'MYGV',
+  'yerraguntla/kamalapuram': 'YEKA',
+  'jammalamadugu': 'JAMD',
+  'porumamilla/kalasapadu': 'POKA'
+};
+
 function doGet(e) {
   try {
     var action = e && e.parameter ? e.parameter.action : '';
@@ -206,6 +216,30 @@ function normalizedPrescriber_(value) {
   return normalized === 'rx' || normalized === 'yes' ? 'Rx' : 'NRx';
 }
 
+function campCode_(camp) {
+  var normalizedCamp = normalized_(camp);
+  return CAMP_CODE_MAP[normalizedCamp]
+    || cleanText_(camp, 120).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4)
+    || 'DOC';
+}
+
+function nextDoctorIdForCamp_(headers, rows, camp) {
+  var campIndex = columnIndex_(headers, 'Camp');
+  var idIndex = columnIndex_(headers, 'ID');
+  var code = campCode_(camp);
+  var maxSequence = 0;
+
+  rows.forEach(function (row) {
+    if (normalized_(row[campIndex]) !== normalized_(camp)) return;
+    var match = cleanText_(row[idIndex], 120).match(/^(.+)-(\d+)$/);
+    if (!match || normalized_(match[1]) !== normalized_(code)) return;
+    var sequence = Number(match[2]);
+    if (isFinite(sequence)) maxSequence = Math.max(maxSequence, sequence);
+  });
+
+  return code + '-' + ('000' + (maxSequence + 1)).slice(-3);
+}
+
 function localDate_(date) {
   return Utilities.formatDate(date, CONFIG.TIME_ZONE, 'yyyy-MM-dd');
 }
@@ -361,6 +395,7 @@ function doctorCellValue_(doctor, canonical) {
 }
 
 function upsertDoctor_(input) {
+  var isNewRecord = input && input.isNewRecord === true;
   var doctor = validateDoctor_(input);
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -375,6 +410,8 @@ function upsertDoctor_(input) {
     var nameIndex = columnIndex_(headers, 'Name');
     var hospitalIndex = columnIndex_(headers, 'Hospital');
     var rowNumber = -1;
+
+    if (isNewRecord) doctor.id = nextDoctorIdForCamp_(headers, rows, doctor.camp);
 
     rows.forEach(function (row, index) {
       var existingId = cleanText_(row[idIndex], 120);
