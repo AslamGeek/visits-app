@@ -168,7 +168,7 @@ export function Visits({ doctors, visits, settings, focusDoctorId, onSave }: Vis
   )
   const [query, setQuery] = useState('')
   const [specialty, setSpecialty] = useState('')
-  const [callSchedule, setCallSchedule] = useState('')
+  const [callSchedule, setCallSchedule] = useState('Everyday')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -177,14 +177,14 @@ export function Visits({ doctors, visits, settings, focusDoctorId, onSave }: Vis
   const effectiveKind: VisitKind = isSunday ? 'Sunday' : noVisits ? 'Holiday' : 'Visit'
   const campDoctors = doctors.filter((doctor) => doctor.camp === activeCamp)
   const specialties = unique(campDoctors.flatMap((doctor) => doctor.specialties))
-  const callSchedules = unique(campDoctors.map((doctor) => doctor.callSchedule))
+  const callSchedules = unique(settings.callSchedules)
   const lastVisitMap = useMemo(() => buildLastVisitMap(visits), [visits])
 
   const filteredDoctors = campDoctors
     .filter((doctor) => !query || [doctor.name, doctor.hospital, doctor.pharmacy]
       .some((value) => normalize(value).includes(normalize(query))))
     .filter((doctor) => !specialty || doctor.specialties.includes(specialty))
-    .filter((doctor) => !callSchedule || doctor.callSchedule === callSchedule)
+    .filter((doctor) => !callSchedule || normalize(doctor.callSchedule) === normalize(callSchedule))
     .sort((a, b) => {
       const aDate = lastVisitMap.get(a.id) ?? lastVisitMap.get(normalize(a.name)) ?? ''
       const bDate = lastVisitMap.get(b.id) ?? lastVisitMap.get(normalize(b.name)) ?? ''
@@ -359,13 +359,13 @@ export function Visits({ doctors, visits, settings, focusDoctorId, onSave }: Vis
                   />
                   {query && <button onClick={() => setQuery('')} aria-label="Clear search"><X size={16} /></button>}
                 </div>
-                <select aria-label="Filter by specialty" value={specialty} onChange={(event) => setSpecialty(event.target.value)}>
-                  <option value="">All specialties</option>
-                  {specialties.map((item) => <option key={item}>{item}</option>)}
-                </select>
                 <select aria-label="Filter by call schedule" value={callSchedule} onChange={(event) => setCallSchedule(event.target.value)}>
                   <option value="">Any schedule</option>
                   {callSchedules.map((item) => <option key={item}>{item}</option>)}
+                </select>
+                <select aria-label="Filter by specialty" value={specialty} onChange={(event) => setSpecialty(event.target.value)}>
+                  <option value="">All specialties</option>
+                  {specialties.map((item) => <option key={item}>{item}</option>)}
                 </select>
               </div>
 
