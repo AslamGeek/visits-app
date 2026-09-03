@@ -5,6 +5,7 @@ import {
   CloudOff,
   Download,
   Moon,
+  Plus,
   RefreshCw,
   Stethoscope,
   Sun,
@@ -301,6 +302,16 @@ function App() {
           <div><p className="eyebrow">Field companion</p><h1>{APP_NAME}</h1></div>
         </div>
         <div className="header-actions">
+          {section === 'directory' && (
+            <button
+              className="icon-button"
+              onClick={() => setEditingDoctor(null)}
+              aria-label="Add doctor"
+              title="Add doctor"
+            >
+              <Plus size={21} />
+            </button>
+          )}
           <SyncBadge
             detail={syncDetail}
             onRetry={() => void syncNow().then(reload)}

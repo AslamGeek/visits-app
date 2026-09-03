@@ -33,7 +33,6 @@
 .selection-toolbar,
 .sheet-header,
 .modal-appbar,
-.list-heading,
 .detail-section-heading {
   display: flex;
   align-items: center;
@@ -312,33 +311,14 @@
 
 .active-filter-row button { margin-left: auto; padding: 5px 7px; color: var(--accent-strong); background: transparent; border: 0; font-size: 11px; font-weight: 760; cursor: pointer; }
 
-.list-heading,
 .section-title-row {
   justify-content: space-between;
 }
 
-.list-heading { margin: 21px 1px 10px; }
-.list-heading h2,
 .section-title-row h2,
 .visit-builder h2,
 .sheet-header h2,
 .modal-appbar h2 { margin-top: 3px; color: var(--ink); font-size: 21px; font-weight: 780; letter-spacing: -0.035em; }
-
-.add-button {
-  display: flex;
-  min-height: 40px;
-  align-items: center;
-  gap: 6px;
-  padding: 0 13px;
-  color: white;
-  background: var(--accent);
-  border: 0;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 750;
-  cursor: pointer;
-  box-shadow: 0 7px 17px color-mix(in srgb, var(--accent) 22%, transparent);
-}
 
 .doctor-list {
   display: grid;
@@ -374,6 +354,11 @@
   background: linear-gradient(105deg, var(--accent-soft), var(--accent-softer) 48%, var(--surface));
   border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
   box-shadow: inset 4px 0 0 var(--accent), var(--shadow-sm);
+}
+
+.directory-page > .doctor-list,
+.directory-page > .empty-card {
+  margin-top: 12px;
 }
 
 @media (prefers-reduced-motion: reduce) {

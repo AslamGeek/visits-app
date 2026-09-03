@@ -427,16 +427,6 @@ export function Directory({
         </div>
       )}
 
-      <div className="list-heading">
-        <div>
-          <p className="eyebrow">Your directory</p>
-          <h2>{filtered.length === 1 ? '1 doctor' : `${filtered.length} doctors`}</h2>
-        </div>
-        <button className="add-button" onClick={onAdd}>
-          <Plus size={18} /> Add
-        </button>
-      </div>
-
       {doctors.length === 0 ? (
         <div className="empty-card">
           <div className="empty-icon"><Plus size={22} /></div>
