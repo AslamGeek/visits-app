@@ -146,6 +146,7 @@ function App() {
     pending: 0,
   })
   const [dailyCamp, setDailyCamp] = useState(readDailyCamp)
+  const dailyCampInitialized = useRef(Boolean(dailyCamp))
   const [visitsContextVersion, setVisitsContextVersion] = useState(0)
   const [filters, setFilters] = useState<FilterState>(() => ({
     ...structuredClone(EMPTY_FILTERS),
@@ -163,9 +164,21 @@ function App() {
     return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })
 
-  const reload = useCallback(async () => {
-    setSnapshot(await loadSnapshot())
+  const acceptSnapshot = useCallback((data: AppSnapshot) => {
+    setSnapshot(data)
+    const firstCamp = data.master.settings.camps[0]
+    if (!dailyCampInitialized.current && firstCamp) {
+      dailyCampInitialized.current = true
+      setDailyCamp(firstCamp)
+      saveDailyCamp(firstCamp)
+      setFilters((current) => current.camp.length ? current : { ...current, camp: [firstCamp] })
+      setVisitsContextVersion((current) => current + 1)
+    }
   }, [])
+
+  const reload = useCallback(async () => {
+    acceptSnapshot(await loadSnapshot())
+  }, [acceptSnapshot])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -176,6 +189,7 @@ function App() {
     if (!dailyCamp) return
     const clearExpiredDailyCamp = () => {
       if (readDailyCamp()) return
+      dailyCampInitialized.current = false
       setDailyCamp('')
       setFilters((current) => {
         const stillUsingDailyDefault = current.camp.length === 1
@@ -227,7 +241,7 @@ function App() {
     let active = true
     void loadSnapshot().then((data) => {
       if (!active) return
-      setSnapshot(data)
+      acceptSnapshot(data)
       setLoading(false)
       setSyncDetail((current) => ({ ...current, pending: data.pendingCount }))
     })
@@ -268,7 +282,7 @@ function App() {
       document.removeEventListener('visibilitychange', visible)
       window.clearInterval(periodicSync)
     }
-  }, [reload])
+  }, [acceptSnapshot, reload])
 
   const showToast = useCallback((next: Omit<ToastState, 'id'>) => {
     setToast({ ...next, id: crypto.randomUUID() })
@@ -353,6 +367,7 @@ function App() {
   }
 
   const chooseDailyCamp = (camp: string) => {
+    dailyCampInitialized.current = true
     setDailyCamp(camp)
     saveDailyCamp(camp)
     setFilters((current) => ({ ...current, camp: camp ? [camp] : [] }))
