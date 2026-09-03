@@ -26,6 +26,7 @@ import { DoctorDetail } from './components/DoctorDetail'
 import { DoctorForm } from './components/DoctorForm'
 import { Visits } from './components/Visits'
 import { onSyncStatus, queueChange, syncNow, type SyncDetail } from './sync'
+import { formatDate, localDateString } from './utils'
 import {
   EMPTY_FILTERS,
   type AppSnapshot,
@@ -45,12 +46,7 @@ function readDailyCamp(): string {
       date?: string
       camp?: string
     }
-    const today = new Date()
-    const date = [
-      today.getFullYear(),
-      String(today.getMonth() + 1).padStart(2, '0'),
-      String(today.getDate()).padStart(2, '0'),
-    ].join('-')
+    const date = localDateString()
     if (stored.date === date && stored.camp) return stored.camp
     localStorage.removeItem(DAILY_CAMP_STORAGE_KEY)
   } catch {
@@ -64,12 +60,7 @@ function saveDailyCamp(camp: string) {
     localStorage.removeItem(DAILY_CAMP_STORAGE_KEY)
     return
   }
-  const today = new Date()
-  const date = [
-    today.getFullYear(),
-    String(today.getMonth() + 1).padStart(2, '0'),
-    String(today.getDate()).padStart(2, '0'),
-  ].join('-')
+  const date = localDateString()
   localStorage.setItem(DAILY_CAMP_STORAGE_KEY, JSON.stringify({ date, camp }))
 }
 
@@ -151,7 +142,6 @@ function App() {
   const [filters, setFilters] = useState<FilterState>(() => ({
     ...structuredClone(EMPTY_FILTERS),
     camp: dailyCamp ? [dailyCamp] : [],
-    prescriber: ['Rx'],
   }))
   const [editingDoctor, setEditingDoctor] = useState<Doctor | null | undefined>(undefined)
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
@@ -421,19 +411,18 @@ function App() {
       )}
 
       <main className="main-content">
-        {!loading && snapshot.master.settings.camps.length > 0 && (
+        {!loading && section === 'directory' && snapshot.master.settings.camps.length > 0 && (
           <label className="daily-camp-picker">
             <span className="daily-camp-icon"><MapPin size={17} /></span>
             <span className="daily-camp-copy">
               <strong>Today’s camp</strong>
-              <small>Default only</small>
+              <small>{formatDate(localDateString())}</small>
             </span>
             <select
               aria-label="Set today's default camp"
               value={activeDailyCamp}
               onChange={(event) => chooseDailyCamp(event.target.value)}
             >
-              <option value="">All camps</option>
               {snapshot.master.settings.camps.map((camp) => (
                 <option key={camp}>{camp}</option>
               ))}

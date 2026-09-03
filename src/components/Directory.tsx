@@ -208,6 +208,14 @@ function FilterSheet({
     ...doctors.map((doctor) => doctor.callSchedule),
   ])
   const groups: FilterGroup[] = [
+    {
+      key: 'prescriber',
+      label: 'Prescriber',
+      items: [
+        { id: 'Rx', label: 'Rx' },
+        { id: 'NRx', label: 'NRx' },
+      ],
+    },
     { key: 'area', label: 'Area', items: settings.areas.map((id) => ({ id, label: id })) },
     { key: 'camp', label: 'Camp', items: settings.camps.map((id) => ({ id, label: id })) },
     {
@@ -232,14 +240,6 @@ function FilterSheet({
       key: 'potential',
       label: 'Potential',
       items: settings.potentials.map((id) => ({ id, label: id })),
-    },
-    {
-      key: 'prescriber',
-      label: 'Prescriber',
-      items: [
-        { id: 'Rx', label: 'Rx' },
-        { id: 'NRx', label: 'NRx' },
-      ],
     },
   ]
 
