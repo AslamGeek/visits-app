@@ -20,6 +20,8 @@
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   backdrop-filter: blur(18px) saturate(135%);
+  transition: transform 200ms ease, opacity 160ms ease;
+  will-change: transform;
 }
 
 .brand-lockup,
@@ -187,6 +189,20 @@
   border-radius: 19px;
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(20px);
+  transition: transform 200ms ease, opacity 160ms ease;
+  will-change: transform;
+}
+
+.app-shell.bars-hidden .app-header {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(calc(-100% - env(safe-area-inset-top)));
+}
+
+.app-shell.bars-hidden .bottom-nav {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(calc(100% + 24px + var(--safe-bottom)));
 }
 
 .bottom-nav button {
@@ -358,6 +374,13 @@
   background: linear-gradient(105deg, var(--accent-soft), var(--accent-softer) 48%, var(--surface));
   border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
   box-shadow: inset 4px 0 0 var(--accent), var(--shadow-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-header,
+  .bottom-nav {
+    transition: none;
+  }
 }
 .doctor-card-main { width: 0; min-width: 0; max-width: 100%; flex: 1 1 0; overflow: hidden; }
 .doctor-title-row { min-width: 0; gap: 7px; }

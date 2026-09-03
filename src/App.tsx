@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CalendarDays,
   Check,
@@ -100,6 +100,8 @@ function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
 
 function App() {
   const [section, setSection] = useState<Section>('directory')
+  const [barsHidden, setBarsHidden] = useState(false)
+  const lastScrollY = useRef(0)
   const [snapshot, setSnapshot] = useState<AppSnapshot>(EMPTY_SNAPSHOT)
   const [loading, setLoading] = useState(true)
   const [syncDetail, setSyncDetail] = useState<SyncDetail>({
@@ -126,6 +128,36 @@ function App() {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('medrep-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    let frame = 0
+    const updateBars = () => {
+      const currentScrollY = Math.max(0, window.scrollY)
+      const movement = currentScrollY - lastScrollY.current
+
+      if (currentScrollY <= 16) {
+        setBarsHidden(false)
+        lastScrollY.current = currentScrollY
+      } else if (movement > 8) {
+        setBarsHidden(true)
+        lastScrollY.current = currentScrollY
+      } else if (movement < -8) {
+        setBarsHidden(false)
+        lastScrollY.current = currentScrollY
+      }
+      frame = 0
+    }
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateBars)
+    }
+
+    lastScrollY.current = Math.max(0, window.scrollY)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -262,7 +294,7 @@ function App() {
     snapshot.doctors.length === 0
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${barsHidden ? ' bars-hidden' : ''}`}>
       <header className="app-header">
         <div className="brand-lockup">
           <div className="brand-mark"><Stethoscope size={21} /></div>
