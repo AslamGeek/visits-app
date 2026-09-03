@@ -302,6 +302,14 @@ function App() {
           <div><p className="eyebrow">Field companion</p><h1>{APP_NAME}</h1></div>
         </div>
         <div className="header-actions">
+          {installPrompt && <button className="icon-button" onClick={install} aria-label="Install app"><Download size={19} /></button>}
+          <SyncBadge
+            detail={syncDetail}
+            onRetry={() => void syncNow().then(reload)}
+          />
+          <button className="icon-button" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label={`Use ${theme === 'light' ? 'dark' : 'light'} theme`}>
+            {theme === 'light' ? <Moon size={19} /> : <Sun size={19} />}
+          </button>
           {section === 'directory' && (
             <button
               className="icon-button"
@@ -312,14 +320,6 @@ function App() {
               <Plus size={21} />
             </button>
           )}
-          <SyncBadge
-            detail={syncDetail}
-            onRetry={() => void syncNow().then(reload)}
-          />
-          {installPrompt && <button className="icon-button" onClick={install} aria-label="Install app"><Download size={19} /></button>}
-          <button className="icon-button" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label={`Use ${theme === 'light' ? 'dark' : 'light'} theme`}>
-            {theme === 'light' ? <Moon size={19} /> : <Sun size={19} />}
-          </button>
         </div>
       </header>
 
