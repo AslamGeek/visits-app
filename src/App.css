@@ -464,8 +464,8 @@
 .preset-chip { display: inline-flex; flex: 0 0 auto; overflow: hidden; background: var(--warm-soft); border: 1px solid color-mix(in srgb, var(--warm) 22%, var(--border)); border-radius: 99px; }
 .preset-chip button { min-height: 35px; padding: 0 10px; color: var(--warm); background: transparent; border: 0; font-size: 11px; font-weight: 700; cursor: pointer; }
 .preset-chip .preset-delete { padding-left: 3px; }
-.save-preset-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 14px 0; border-top: 1px solid var(--border); }
-.save-preset-row input { min-width: 0; height: 46px; padding: 0 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; outline: 0; }
+.save-preset-row { padding: 14px 0; border-top: 1px solid var(--border); }
+.save-preset-row .secondary-button { display: inline-flex; width: 100%; align-items: center; justify-content: center; gap: 7px; }
 .sheet-actions { position: sticky; bottom: calc(-16px - var(--safe-bottom)); display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 8px; margin: 8px -2px -16px; padding: 11px 2px calc(16px + var(--safe-bottom)); background: linear-gradient(transparent, var(--surface-raised) 20%); }
 
 .full-screen-layer {

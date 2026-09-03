@@ -114,6 +114,68 @@ function activeFilterCount(filters: FilterState) {
   return Object.values(filters).reduce((total, values) => total + values.length, 0)
 }
 
+const TEMPLATE_ORDER: (keyof FilterState)[] = [
+  'camp',
+  'area',
+  'product',
+  'prescriber',
+  'specialty',
+  'callSchedule',
+  'potential',
+]
+
+const TEMPLATE_LABELS: Record<keyof FilterState, string> = {
+  area: 'Area',
+  camp: 'Camp',
+  specialty: 'Specialty',
+  callSchedule: 'Schedule',
+  product: 'Product',
+  potential: 'Potential',
+  prescriber: 'Prescriber',
+}
+
+function sameFilters(left: FilterState, right: FilterState): boolean {
+  return TEMPLATE_ORDER.every((key) => {
+    const leftValues = [...left[key]].sort()
+    const rightValues = [...right[key]].sort()
+    return leftValues.length === rightValues.length &&
+      leftValues.every((value, index) => value === rightValues[index])
+  })
+}
+
+function compactLabel(value: string, maxLength = 14): string {
+  const clean = value.trim()
+  return clean.length > maxLength ? `${clean.slice(0, maxLength - 1)}…` : clean
+}
+
+function automaticTemplateName(
+  filters: FilterState,
+  products: Product[],
+  presets: FilterPreset[],
+): string {
+  const exact = presets.find((preset) => sameFilters(preset.filters, filters))
+  if (exact) return exact.name
+
+  const parts = TEMPLATE_ORDER.flatMap((key) => {
+    const values = filters[key] as string[]
+    if (!values.length) return []
+    if (values.length > 1) return [`${TEMPLATE_LABELS[key]} ×${values.length}`]
+    const value = key === 'product'
+      ? products.find((product) => normalize(product.prodId) === normalize(values[0]))?.name || values[0]
+      : values[0]
+    return [compactLabel(value)]
+  })
+  const visibleParts = parts.slice(0, 3)
+  if (parts.length > 3) visibleParts.push(`+${parts.length - 3}`)
+  const baseName = visibleParts.join(' + ')
+  const usedNames = new Set(presets.map((preset) => normalize(preset.name)))
+  if (!usedNames.has(normalize(baseName))) return baseName
+
+  let suffix = 2
+  while (usedNames.has(normalize(`${baseName} · ${suffix}`))) suffix += 1
+  return `${baseName} · ${suffix}`
+}
+
 function FilterSheet({
   open,
   doctors,
@@ -137,7 +199,6 @@ function FilterSheet({
   onSavePreset: (name: string, filters: FilterState) => void
   onDeletePreset: (id: string) => void
 }) {
-  const [presetName, setPresetName] = useState('')
   const callSchedules = unique([
     ...settings.callSchedules,
     ...doctors.map((doctor) => doctor.callSchedule),
@@ -189,10 +250,9 @@ function FilterSheet({
   }
 
   const savePreset = () => {
-    const name = presetName.trim()
-    if (!name || activeFilterCount(filters) === 0) return
+    if (activeFilterCount(filters) === 0) return
+    const name = automaticTemplateName(filters, products, presets)
     onSavePreset(name, filters)
-    setPresetName('')
   }
 
   return (
@@ -212,11 +272,14 @@ function FilterSheet({
 
         {presets.length > 0 && (
           <section className="filter-section">
-            <div className="section-label"><Bookmark size={15} /> Saved filters</div>
+            <div className="section-label"><Bookmark size={15} /> Templates</div>
             <div className="preset-list">
               {presets.map((preset) => (
                 <div className="preset-chip" key={preset.id}>
-                  <button onClick={() => onChange(structuredClone(preset.filters))}>
+                  <button onClick={() => {
+                    onChange(structuredClone(preset.filters))
+                    onClose()
+                  }}>
                     {preset.name}
                   </button>
                   <button
@@ -259,14 +322,8 @@ function FilterSheet({
 
         {activeFilterCount(filters) > 0 && (
           <section className="save-preset-row">
-            <input
-              value={presetName}
-              onChange={(event) => setPresetName(event.target.value)}
-              placeholder="Save as…"
-              maxLength={40}
-            />
-            <button className="secondary-button" onClick={savePreset} disabled={!presetName.trim()}>
-              Save
+            <button className="secondary-button" onClick={savePreset}>
+              <Bookmark size={15} /> Save template
             </button>
           </section>
         )}
