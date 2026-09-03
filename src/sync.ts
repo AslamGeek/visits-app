@@ -135,6 +135,7 @@ export async function queueChange(
 
 async function pushQueue(): Promise<void> {
   const items = await db.queue.orderBy('createdAt').toArray()
+  const failures: string[] = []
   for (const item of items) {
     try {
       const result = await postOperation(item)
@@ -155,8 +156,15 @@ async function pushQueue(): Promise<void> {
       if (item.id !== undefined) {
         await db.queue.update(item.id, { attempts: item.attempts + 1 })
       }
-      throw error
+      failures.push(error instanceof Error ? error.message : 'A queued change could not be saved')
     }
+  }
+  if (failures.length) {
+    throw new Error(
+      failures.length === 1
+        ? failures[0]
+        : `${failures.length} older changes still need attention`,
+    )
   }
 }
 

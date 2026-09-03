@@ -72,6 +72,7 @@ interface InstallPromptEvent extends Event {
 interface ToastState {
   id: string
   message: string
+  durationMs?: number
   actionLabel?: string
   action?: () => void
 }
@@ -114,9 +115,9 @@ function SyncBadge({
 
 function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
   useEffect(() => {
-    const timer = window.setTimeout(onClose, UNDO_WINDOW_MS)
+    const timer = window.setTimeout(onClose, toast.durationMs ?? UNDO_WINDOW_MS)
     return () => window.clearTimeout(timer)
-  }, [toast.id, onClose])
+  }, [toast.id, toast.durationMs, onClose])
   return (
     <div className="toast" role="status">
       <span>{toast.message}</span>
@@ -284,7 +285,7 @@ function App() {
     await reload()
     setEditingDoctor(undefined)
     setSelectedDoctor(doctor)
-    showToast({ message: 'Doctor saved locally' })
+    showToast({ message: 'Doctor saved locally', durationMs: 3_000 })
     void syncNow().then(reload)
   }
 

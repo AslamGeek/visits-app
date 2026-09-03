@@ -111,7 +111,10 @@ function applyFilters(
         matchesGroup(doctor, key, filters[key], products),
       ),
     )
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => {
+      if (a.prescriber !== b.prescriber) return a.prescriber === 'Rx' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
 }
 
 function activeFilterCount(filters: FilterState) {
@@ -469,7 +472,7 @@ export function Directory({
                     {doctor.potential && <span>{doctor.potential}</span>}
                   </div>
                   {doctor.prescriber === 'Rx' && productNames.length > 0 && (
-                    <div className="product-line">{productNames.join(' · ')}</div>
+                    <div className="product-line">{productNames.join(', ')}</div>
                   )}
                 </div>
                 <span

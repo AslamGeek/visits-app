@@ -67,7 +67,7 @@ export function generateDoctorId(camp: string, doctors: Doctor[]): string {
 
 export function productLabel(product: Product): string {
   return product.dosageForm
-    ? `${product.name} · ${product.dosageForm}`
+    ? `${product.name} (${product.dosageForm})`
     : product.name
 }
 
