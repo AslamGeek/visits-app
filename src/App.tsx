@@ -4,6 +4,7 @@ import {
   Check,
   CloudOff,
   Download,
+  MapPin,
   Moon,
   Plus,
   RefreshCw,
@@ -36,6 +37,41 @@ import {
 
 type Section = 'directory' | 'visits'
 type Theme = 'light' | 'dark'
+const DAILY_CAMP_STORAGE_KEY = 'medrep-daily-camp'
+
+function readDailyCamp(): string {
+  try {
+    const stored = JSON.parse(localStorage.getItem(DAILY_CAMP_STORAGE_KEY) || '{}') as {
+      date?: string
+      camp?: string
+    }
+    const today = new Date()
+    const date = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0'),
+    ].join('-')
+    if (stored.date === date && stored.camp) return stored.camp
+    localStorage.removeItem(DAILY_CAMP_STORAGE_KEY)
+  } catch {
+    localStorage.removeItem(DAILY_CAMP_STORAGE_KEY)
+  }
+  return ''
+}
+
+function saveDailyCamp(camp: string) {
+  if (!camp) {
+    localStorage.removeItem(DAILY_CAMP_STORAGE_KEY)
+    return
+  }
+  const today = new Date()
+  const date = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-')
+  localStorage.setItem(DAILY_CAMP_STORAGE_KEY, JSON.stringify({ date, camp }))
+}
 
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -109,7 +145,13 @@ function App() {
     phase: navigator.onLine ? 'idle' : 'offline',
     pending: 0,
   })
-  const [filters, setFilters] = useState<FilterState>(() => structuredClone(EMPTY_FILTERS))
+  const [dailyCamp, setDailyCamp] = useState(readDailyCamp)
+  const [visitsContextVersion, setVisitsContextVersion] = useState(0)
+  const [filters, setFilters] = useState<FilterState>(() => ({
+    ...structuredClone(EMPTY_FILTERS),
+    camp: dailyCamp ? [dailyCamp] : [],
+    prescriber: ['Rx'],
+  }))
   const [editingDoctor, setEditingDoctor] = useState<Doctor | null | undefined>(undefined)
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
   const [focusDoctorId, setFocusDoctorId] = useState<string | null>(null)
@@ -129,6 +171,27 @@ function App() {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('medrep-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    if (!dailyCamp) return
+    const clearExpiredDailyCamp = () => {
+      if (readDailyCamp()) return
+      setDailyCamp('')
+      setFilters((current) => {
+        const stillUsingDailyDefault = current.camp.length === 1
+          && current.camp[0].toLocaleLowerCase() === dailyCamp.toLocaleLowerCase()
+        return stillUsingDailyDefault ? { ...current, camp: [] } : current
+      })
+      setFocusDoctorId(null)
+      setVisitsContextVersion((current) => current + 1)
+    }
+    const timer = window.setInterval(clearExpiredDailyCamp, 60_000)
+    window.addEventListener('focus', clearExpiredDailyCamp)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', clearExpiredDailyCamp)
+    }
+  }, [dailyCamp])
 
   useEffect(() => {
     let frame = 0
@@ -289,6 +352,18 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const chooseDailyCamp = (camp: string) => {
+    setDailyCamp(camp)
+    saveDailyCamp(camp)
+    setFilters((current) => ({ ...current, camp: camp ? [camp] : [] }))
+    setFocusDoctorId(null)
+    setVisitsContextVersion((current) => current + 1)
+  }
+
+  const activeDailyCamp = snapshot.master.settings.camps.find(
+    (camp) => camp.toLocaleLowerCase() === dailyCamp.toLocaleLowerCase(),
+  ) ?? ''
+
   const needsApiSetup =
     syncDetail.phase === 'error' &&
     snapshot.master.settings.areas.length === 0 &&
@@ -331,6 +406,25 @@ function App() {
       )}
 
       <main className="main-content">
+        {!loading && snapshot.master.settings.camps.length > 0 && (
+          <label className="daily-camp-picker">
+            <span className="daily-camp-icon"><MapPin size={17} /></span>
+            <span className="daily-camp-copy">
+              <strong>Today’s camp</strong>
+              <small>Default only</small>
+            </span>
+            <select
+              aria-label="Set today's default camp"
+              value={activeDailyCamp}
+              onChange={(event) => chooseDailyCamp(event.target.value)}
+            >
+              <option value="">All camps</option>
+              {snapshot.master.settings.camps.map((camp) => (
+                <option key={camp}>{camp}</option>
+              ))}
+            </select>
+          </label>
+        )}
         {loading ? (
           <div className="app-loading"><div className="loading-mark"><Stethoscope size={25} /></div><strong>Opening your field desk…</strong></div>
         ) : section === 'directory' ? (
@@ -348,9 +442,11 @@ function App() {
           />
         ) : (
           <Visits
+            key={visitsContextVersion}
             doctors={snapshot.doctors}
             visits={snapshot.visits}
             settings={snapshot.master.settings}
+            defaultCamp={activeDailyCamp}
             focusDoctorId={focusDoctorId}
             onSave={saveVisit}
           />

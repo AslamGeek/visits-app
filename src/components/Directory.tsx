@@ -94,12 +94,16 @@ function applyFilters(
   return doctors
     .filter((doctor) => {
       if (!normalizedQuery) return true
+      const productNames = doctorProductNames(doctor, products)
       return [
         doctor.name,
         doctor.hospital,
+        doctor.pharmacy,
         doctor.area,
         doctor.camp,
         doctor.specialties.join(' '),
+        doctor.prescribingProductIds.join(' '),
+        productNames.join(' '),
       ].some((value) => normalize(value).includes(normalizedQuery))
     })
     .filter((doctor) =>
@@ -385,8 +389,8 @@ export function Directory({
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Doctor, hospital, area…"
-            aria-label="Search doctors"
+            placeholder="Doctor, area, camp, product…"
+            aria-label="Search doctors, hospitals, pharmacies, areas, camps, specialties, and products"
           />
           {query && (
             <button aria-label="Clear search" onClick={() => setQuery('')}>

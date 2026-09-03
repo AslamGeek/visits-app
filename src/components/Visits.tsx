@@ -32,13 +32,14 @@ interface VisitsProps {
   doctors: Doctor[]
   visits: Visit[]
   settings: MasterSettings
+  defaultCamp: string
   focusDoctorId: string | null
   onSave: (visit: Visit) => Promise<void>
 }
 
-function VisitHistory({ visits, camps }: { visits: Visit[]; camps: string[] }) {
+function VisitHistory({ visits, camps, defaultCamp }: { visits: Visit[]; camps: string[]; defaultCamp: string }) {
   const [dateFilter, setDateFilter] = useState('')
-  const [campFilter, setCampFilter] = useState('')
+  const [campFilter, setCampFilter] = useState(defaultCamp)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [monthVisibility, setMonthVisibility] = useState<Record<string, boolean>>({})
   const campOptions = unique([...camps, ...visits.map((visit) => visit.camp)])
@@ -218,11 +219,11 @@ function VisitHistory({ visits, camps }: { visits: Visit[]; camps: string[] }) {
   )
 }
 
-export function Visits({ doctors, visits, settings, focusDoctorId, onSave }: VisitsProps) {
+export function Visits({ doctors, visits, settings, defaultCamp, focusDoctorId, onSave }: VisitsProps) {
   const initialDoctor = doctors.find((doctor) => doctor.id === focusDoctorId)
   const [activeSection, setActiveSection] = useState<'log' | 'history'>('log')
   const [date, setDate] = useState(localDateString())
-  const [camp, setCamp] = useState(initialDoctor?.camp ?? settings.camps[0] ?? '')
+  const [camp, setCamp] = useState(initialDoctor?.camp ?? defaultCamp ?? settings.camps[0] ?? '')
   const [noVisits, setNoVisits] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>(
     initialDoctor ? [initialDoctor.id] : [],
@@ -351,7 +352,9 @@ export function Visits({ doctors, visits, settings, focusDoctorId, onSave }: Vis
         </button>
       </div>
 
-      {activeSection === 'history' ? <VisitHistory visits={visits} camps={settings.camps} /> : (
+      {activeSection === 'history' ? (
+        <VisitHistory visits={visits} camps={settings.camps} defaultCamp={defaultCamp} />
+      ) : (
         <div className="visit-builder">
           <div className="section-title-row visit-title-row">
             <div><p className="eyebrow">Daily call plan</p><h2>Log visits</h2></div>
@@ -452,7 +455,7 @@ export function Visits({ doctors, visits, settings, focusDoctorId, onSave }: Vis
                       <span className="picker-check">{selected && <Check size={15} />}</span>
                       <div>
                         <strong>{doctor.name}</strong>
-                        <p>{[doctor.specialties.join(', '), doctor.hospital, doctor.pharmacy].filter(Boolean).join(' · ')}</p>
+                        <p>{[doctor.specialties.join(', '), doctor.pharmacy].filter(Boolean).join(' · ')}</p>
                         <small className={isVisitStale(lastDate) ? 'stale' : ''}>
                           <Clock3 size={12} /> {relativeVisitLabel(lastDate)}
                         </small>
