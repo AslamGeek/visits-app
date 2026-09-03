@@ -22,7 +22,9 @@ import {
   localDateString,
   normalize,
   relativeVisitLabel,
+  stripVisitListNumber,
   unique,
+  visitDoctorDisplayLine,
   visitLineForDoctor,
 } from '../utils'
 
@@ -174,7 +176,7 @@ function VisitHistory({ visits, camps }: { visits: Visit[]; camps: string[] }) {
                                     <span><Users size={13} /> Doctors</span>
                                     <ol>
                                       {visit.doctorLines.map((doctor, index) => (
-                                        <li key={`${doctor}-${index}`}>{doctor}</li>
+                                        <li key={`${doctor}-${index}`}>{visitDoctorDisplayLine(doctor)}</li>
                                       ))}
                                     </ol>
                                   </div>
@@ -183,7 +185,7 @@ function VisitHistory({ visits, camps }: { visits: Visit[]; camps: string[] }) {
                                     {visit.pharmacyLines.length ? (
                                       <ol>
                                         {visit.pharmacyLines.map((pharmacy, index) => (
-                                          <li key={`${pharmacy}-${index}`}>{pharmacy}</li>
+                                          <li key={`${pharmacy}-${index}`}>{stripVisitListNumber(pharmacy)}</li>
                                         ))}
                                       </ol>
                                     ) : <p>None linked</p>}
@@ -310,7 +312,9 @@ export function Visits({ doctors, visits, settings, focusDoctorId, onSave }: Vis
       doctorLines: effectiveKind === 'Visit'
         ? selectedDoctors.map(visitLineForDoctor)
         : [`NO_VISIT:${effectiveKind}`],
-      pharmacyLines: effectiveKind === 'Visit' ? pharmacies : [],
+      pharmacyLines: effectiveKind === 'Visit'
+        ? pharmacies.map((pharmacy, index) => `${index + 1}. ${pharmacy}`)
+        : [],
       createdAt: new Date().toISOString(),
       syncState: 'pending',
     }

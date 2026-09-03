@@ -87,20 +87,31 @@ export function doctorProductNames(
   })
 }
 
-export function visitLineForDoctor(doctor: Doctor): string {
+export function stripVisitListNumber(line: string): string {
+  return line.replace(/^\s*\d+\.\s*/, '').trim()
+}
+
+export function visitDoctorDisplayLine(line: string): string {
+  const unnumbered = stripVisitListNumber(line)
+  const separator = unnumbered.indexOf(' — ')
+  return separator > 0 ? unnumbered.slice(separator + 3).trim() : unnumbered
+}
+
+export function visitLineForDoctor(doctor: Doctor, index: number): string {
   const specialty = doctor.specialties.join(', ') || 'General'
-  return `${doctor.id} — ${doctor.name} (${specialty})`
+  return `${index + 1}. ${doctor.name} (${specialty})`
 }
 
 export function doctorIdFromVisitLine(line: string): string | null {
-  const separator = line.indexOf(' — ')
-  return separator > 0 ? line.slice(0, separator).trim() : null
+  const unnumbered = stripVisitListNumber(line)
+  const separator = unnumbered.indexOf(' — ')
+  return separator > 0 ? unnumbered.slice(0, separator).trim() : null
 }
 
 export function visitDoctorName(line: string): string {
-  const withoutId = line.includes(' — ') ? line.split(' — ').slice(1).join(' — ') : line
-  const specialtyStart = withoutId.lastIndexOf(' (')
-  return (specialtyStart > 0 ? withoutId.slice(0, specialtyStart) : withoutId).trim()
+  const displayLine = visitDoctorDisplayLine(line)
+  const specialtyStart = displayLine.lastIndexOf(' (')
+  return (specialtyStart > 0 ? displayLine.slice(0, specialtyStart) : displayLine).trim()
 }
 
 export function buildLastVisitMap(visits: Visit[]): Map<string, string> {

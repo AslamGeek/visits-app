@@ -299,6 +299,139 @@ function getProducts_() {
   }).filter(function (product) { return product.prodId && product.name; });
 }
 
+function formatProductId_(sequence) {
+  return 'PROD-' + ('000' + sequence).slice(-Math.max(3, String(sequence).length));
+}
+
+/**
+ * Converts legacy/missing product IDs to PROD-001, PROD-002, ... while
+ * preserving already-valid unique IDs. Exact references in Doctors are
+ * updated at the same time so prescribing-product links do not break.
+ * Run normalizeProductIds once after deploying this version.
+ */
+function normalizeProductIds() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var result = normalizeProductIds_(spreadsheet_());
+    ensureProductEditTrigger_();
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function ensureProductEditTrigger_() {
+  var exists = ScriptApp.getProjectTriggers().some(function (trigger) {
+    return trigger.getHandlerFunction() === 'handleProductEdit_'
+      && trigger.getEventType() === ScriptApp.EventType.ON_EDIT;
+  });
+  if (!exists) {
+    ScriptApp.newTrigger('handleProductEdit_')
+      .forSpreadsheet(CONFIG.SPREADSHEET_ID)
+      .onEdit()
+      .create();
+  }
+}
+
+function normalizeProductIds_(ss) {
+  var productSheet = ss.getSheetByName('Products');
+  var doctorSheet = ss.getSheetByName('Doctors');
+  if (!productSheet) throw new Error('Missing Products sheet.');
+
+  var headers = readHeaders_(productSheet);
+  var idIndex = columnIndex_(headers, 'ProdID');
+  var nameIndex = columnIndex_(headers, 'Name');
+  var rowCount = Math.max(0, productSheet.getLastRow() - 1);
+  if (!rowCount) return { updatedProducts: 0, updatedDoctors: 0 };
+
+  var rows = productSheet.getRange(2, 1, rowCount, headers.length).getDisplayValues();
+  var oldIdCounts = {};
+  rows.forEach(function (row) {
+    if (!cleanText_(row[nameIndex], 150)) return;
+    var key = normalized_(row[idIndex]);
+    if (key) oldIdCounts[key] = (oldIdCounts[key] || 0) + 1;
+  });
+
+  var used = {};
+  var preserved = {};
+  rows.forEach(function (row, index) {
+    if (!cleanText_(row[nameIndex], 150)) return;
+    var match = cleanText_(row[idIndex], 100).toUpperCase().match(/^PROD-(\d{3,})$/);
+    if (!match) return;
+    var sequence = Number(match[1]);
+    if (sequence < 1) return;
+    var canonical = formatProductId_(sequence);
+    if (!used[canonical]) {
+      used[canonical] = true;
+      preserved[index] = canonical;
+    }
+  });
+
+  var replacements = {};
+  var updatedProducts = 0;
+  var nextSequence = 1;
+  var idValues = rows.map(function (row, index) {
+    var name = cleanText_(row[nameIndex], 150);
+    var oldId = cleanText_(row[idIndex], 100);
+    if (!name) {
+      if (oldId) updatedProducts += 1;
+      return [''];
+    }
+
+    var newId = preserved[index];
+    if (!newId) {
+      while (used[formatProductId_(nextSequence)]) nextSequence += 1;
+      newId = formatProductId_(nextSequence);
+      used[newId] = true;
+      nextSequence += 1;
+    }
+
+    if (oldId !== newId) {
+      updatedProducts += 1;
+      var oldKey = normalized_(oldId);
+      if (oldKey && oldIdCounts[oldKey] === 1) replacements[oldKey] = newId;
+    }
+    return [newId];
+  });
+
+  productSheet.getRange(2, idIndex + 1, rowCount, 1).setValues(idValues);
+
+  var updatedDoctors = 0;
+  if (doctorSheet && doctorSheet.getLastRow() > 1 && Object.keys(replacements).length) {
+    var doctorHeaders = readHeaders_(doctorSheet);
+    var productIndex = columnIndex_(doctorHeaders, 'Prescribing Products');
+    var doctorRowCount = doctorSheet.getLastRow() - 1;
+    var referenceRange = doctorSheet.getRange(2, productIndex + 1, doctorRowCount, 1);
+    var referenceValues = referenceRange.getDisplayValues().map(function (row) {
+      var changed = false;
+      var values = cleanList_(row[0]).map(function (value) {
+        var replacement = replacements[normalized_(value)];
+        if (replacement) changed = true;
+        return replacement || value;
+      });
+      if (changed) updatedDoctors += 1;
+      return [values.join(', ')];
+    });
+    referenceRange.setValues(referenceValues);
+  }
+
+  return { updatedProducts: updatedProducts, updatedDoctors: updatedDoctors };
+}
+
+// Products are maintained directly in Sheets. Assign/correct IDs whenever a
+// product row is edited, including multi-row paste operations.
+function handleProductEdit_(e) {
+  if (!e || !e.range || e.range.getSheet().getName() !== 'Products' || e.range.getRow() < 2) return;
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return;
+  try {
+    normalizeProductIds_(e.source);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function doctorFromRow_(headers, row) {
   var id = cleanText_(valueAt_(headers, row, 'ID'), 120);
   if (!id) return null;
@@ -479,11 +612,12 @@ function saveVisit_(input) {
       if (!doctor || doctor.camp !== camp) return;
       doctorIds.push(doctor.id);
       doctorLines.push(
-        doctor.id + ' — ' + doctor.name + ' (' + (doctor.specialties.join(', ') || 'General') + ')'
+        (doctorLines.length + 1) + '. ' + doctor.name
+          + ' (' + (doctor.specialties.join(', ') || 'General') + ')'
       );
       if (doctor.pharmacy && !pharmacyMap[normalized_(doctor.pharmacy)]) {
         pharmacyMap[normalized_(doctor.pharmacy)] = true;
-        pharmacyLines.push(doctor.pharmacy);
+        pharmacyLines.push((pharmacyLines.length + 1) + '. ' + doctor.pharmacy);
       }
     });
     if (!doctorLines.length) throw new Error('Select at least one doctor from this camp.');
@@ -556,8 +690,9 @@ function visitFromRow_(headers, row, sheetRow) {
   var noVisit = doctorsText.indexOf('NO_VISIT:') === 0 ? doctorsText.slice(9) : '';
   var kind = ['Sunday', 'Holiday', 'Leave'].indexOf(noVisit) !== -1 ? noVisit : 'Visit';
   var doctorIds = doctorLines.map(function (line) {
-    var separator = line.indexOf(' — ');
-    return separator > 0 ? line.slice(0, separator).trim() : '';
+    var unnumbered = line.replace(/^\s*\d+\.\s*/, '');
+    var separator = unnumbered.indexOf(' — ');
+    return separator > 0 ? unnumbered.slice(0, separator).trim() : '';
   }).filter(Boolean);
 
   var fingerprint = Utilities.base64EncodeWebSafe(

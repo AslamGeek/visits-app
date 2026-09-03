@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 
 const SPREADSHEET_ID = '1Zg5Rxn6TNskev1EFwwrZI9gWP1mDyifBg6ACI_YTFxU'
 const DEFAULT_GAS_WEB_APP_URL =
-  'https://script.google.com/macros/s/AKfycbzlzn1Q9C2lppXa7E8Zo1UH4QfWAvXf6ufqP0hPw7Vmvdb_hr5RduxT5iLQVIfKI4R3/exec'
+  'https://script.google.com/macros/s/AKfycbzKQC-4sk9A-7K3C32W5CZwGkvggkp_jM_p93QJTgcgO_TQX9dSyY3KymzcM3HAHOx4/exec'
 
 function parseCsv(text) {
   const rows = []
@@ -96,9 +96,11 @@ function makeVisit(row, index) {
     day: String(row.Day || ''),
     camp: String(row.Camp || ''),
     kind,
-    doctorIds: doctorLines
-      .map((line) => line.split(/\s+[—-]\s+/)[0]?.trim() || '')
-      .filter(Boolean),
+    doctorIds: doctorLines.map((line) => {
+      const unnumbered = line.replace(/^\s*\d+\.\s*/, '')
+      const match = unnumbered.match(/^(.+?)\s+[—-]\s+/)
+      return match?.[1]?.trim() || ''
+    }).filter(Boolean),
     doctorCount: Number(row['Doctors (count)']) || 0,
     pharmacyCount: Number(row['Pharmacy (count)']) || 0,
     doctorLines,
